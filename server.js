@@ -1,35 +1,39 @@
 const express = require('express');
-const { createHandler} = require('graphql-http/lib/use/express');
-const { buildSchema} = require('graphql');
-const { ruruHTML } = require('ruru/server');
+const mongoose = require('mongoose');
+const schema = require('./src/graphQl/Schema');
+const resolvers = require('./src/graphQl/Resolver');
+const bodyParser = require('body-parser');
+const cors = require('cors');
+const { ApolloServer } = require('apollo-server-express');
+const mongoDbUrl = require('./src/config');
 
-const schema = buildSchema(`
-  type Query {
-    hello: String
-  }
-`)
+const connect = mongoose.connect(mongoDbUrl.mongoDB, {});
 
-// The rootValue provides a resolver function for each API endpoint
-const root = {
-    hello() {
-        return "Hello world!"
-    }
-}
+connect.then((db) => {
+  console.log('Connected correctly to server!');
+}, (err) => {
+  console.log(err);
+});
+
+const server = new ApolloServer({
+  typeDefs: schema,
+  resolvers: resolvers
+});
 
 const app = express();
 
-app.all(
-    "/graphql",
-    createHandler({
-        schema: schema,
-        rootValue: root
-    })
-)
+app.use(bodyParser.json());
+app.use('*', cors());
 
-app.get('/', (_req, res) => {
-    res.type('html')
-    res.end(ruruHTML({ endpoint: '/graphql'}))
-})
+async function startServer() {
+  await server.start();
+  server.applyMiddleware({ app });
+}
 
-app.listen(4000);
-console.log("Running a GraphQL API server at http://localhost:4000/ghraphql");
+startServer().then(() => {
+  app.listen({ port: 4000 }, () =>
+    console.log(`🚀 Server ready at http://localhost:4000${server.graphqlPath}`)
+  );
+}).catch(err => {
+  console.error('Error starting server:', err);
+});
